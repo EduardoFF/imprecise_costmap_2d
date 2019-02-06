@@ -53,7 +53,7 @@ public:
   /**
    * @brief  Constructor for a costmap
    */
-  ImpreciseCostmap(std::string global_frame, bool rolling_window, bool track_unknown);
+  ImpreciseCostmap(std::string global_frame, costmap_2d::Costmap2D*, bool rolling_window, bool track_unknown);
 
   /**
    * @brief  Destructor
@@ -87,6 +87,16 @@ public:
   costmap_2d::Costmap2D* getCostmap()
   {
     return &costmap_;
+  }
+
+  costmap_2d::Costmap2D* getLowCostmap()
+  {
+    return &low_costmap_;
+  }
+
+  costmap_2d::Costmap2D* getHighCostmap()
+  {
+    return &high_costmap_;
   }
 
   bool isRolling()
@@ -141,6 +151,9 @@ public:
 
 private:
   costmap_2d::Costmap2D costmap_;
+  costmap_2d::Costmap2D low_costmap_;
+  costmap_2d::Costmap2D high_costmap_;
+  costmap_2d::Costmap2D *p_costmap_;
   std::string global_frame_;
 
   bool rolling_window_;  /// < @brief Whether or not the costmap should roll with the robot

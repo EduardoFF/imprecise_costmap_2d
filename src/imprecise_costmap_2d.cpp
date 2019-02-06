@@ -47,8 +47,9 @@ using std::vector;
 namespace imprecise_costmap_2d
 {
 
-ImpreciseCostmap::ImpreciseCostmap(std::string global_frame, bool rolling_window, bool track_unknown) :
+  ImpreciseCostmap::ImpreciseCostmap(std::string global_frame, costmap_2d::Costmap2D *p_costmap, bool rolling_window, bool track_unknown) :
     costmap_(),
+    p_costmap_(p_costmap),
     global_frame_(global_frame),
     rolling_window_(rolling_window),
     current_(false),
@@ -69,6 +70,10 @@ ImpreciseCostmap::ImpreciseCostmap(std::string global_frame, bool rolling_window
     costmap_.setDefaultValue(255);
   else
     costmap_.setDefaultValue(0);
+  
+  
+
+  
   ROS_INFO("Initialized Imprecise Costmap\n");
 
 }
@@ -84,6 +89,10 @@ void ImpreciseCostmap::resizeMap(unsigned int size_x, unsigned int size_y, doubl
   boost::unique_lock<costmap_2d::Costmap2D::mutex_t> lock(*(costmap_.getMutex()));
   size_locked_ = size_locked;
   costmap_.resizeMap(size_x, size_y, resolution, origin_x, origin_y);
+
+  low_costmap_.resizeMap(size_x, size_y, resolution, origin_x, origin_y);
+  high_costmap_.resizeMap(size_x, size_y, resolution, origin_x, origin_y);
+
   /*
   for (vector<boost::shared_ptr<Layer> >::iterator plugin = plugins_.begin(); plugin != plugins_.end();
       ++plugin)
@@ -118,7 +127,7 @@ void ImpreciseCostmap::updateMap(double robot_x, double robot_y, double robot_ya
   y0 = std::max(0, y0);
   yn = std::min(int(costmap_.getSizeInCellsY()), yn + 1);
 
-  ROS_DEBUG("Updating area x: [%d, %d] y: [%d, %d] map size %d x %d (%.2f x %.2f)",
+  ROS_INFO("Updating area x: [%d, %d] y: [%d, %d] map size %d x %d (%.2f x %.2f)",
 	    x0, xn, y0, yn, costmap_.getSizeInCellsX(), costmap_.getSizeInCellsY(),costmap_.getSizeInMetersX(), costmap_.getSizeInMetersY());
 
   if (xn < x0 || yn < y0)

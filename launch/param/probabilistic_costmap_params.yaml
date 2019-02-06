@@ -1,0 +1,8 @@
+static_layer:
+  enabled:              true
+  lethal_threshold:     100
+  trinary_costmap:      false
+  
+
+  
+

@@ -1,0 +1,32 @@
+<launch>
+  <!-- 
+  NOTE: You'll need to bring up something that publishes sensor data (see
+  rosstage), something that publishes a map (see map_server), and something to
+  visualize a costmap (see nav_view), to see things work.
+
+  Also, on a real robot, you'd want to set the "use_sim_time" parameter to false, or just not set it.
+  -->
+  <param name="/use_sim_time" value="true"/>
+  <arg name="odom_frame_id"   default="odom"/>
+  <arg name="base_frame_id"   default="base_footprint"/>
+  <arg name="global_frame_id" default="map"/>
+  <arg name="odom_topic" default="odom" />
+  <arg name="laser_topic" default="scan" />
+  <arg name="custom_param_file" default="$(find imprecise_costmap_2d)/launch/param/dummy.yaml"/>
+
+
+  <!-- Publishes the voxel grid to rviz for display -->
+  <node pkg="costmap_2d" type="costmap_2d_markers" name="voxel_visualizer">
+    <remap from="voxel_grid" to="costmap/voxel_grid"/>
+  </node>
+
+  <!-- Run the costmap node -->
+  <node name="costmap_node" pkg="costmap_2d" type="costmap_2d_node" >
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/costmap_common_params.yaml" command="load" ns="costmap" />
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/global_costmap_params.yaml" command="load" ns="costmap" />
+    <param name="costmap/global_frame" value="$(arg global_frame_id)"/>
+    <param name="costmap/robot_base_frame" value="$(arg base_frame_id)"/>
+    <remap from="scan" to="$(arg laser_topic)"/>
+  </node>
+
+</launch>

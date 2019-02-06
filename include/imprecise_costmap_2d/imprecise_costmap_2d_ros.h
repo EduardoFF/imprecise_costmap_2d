@@ -40,15 +40,17 @@
 
 //#include <costmap_2d/layered_costmap.h>
 #include <imprecise_costmap_2d/imprecise_costmap_2d.h>
-//#include <costmap_2d/layer.h>
+#include <costmap_2d/layer.h>
+#include <costmap_2d/layered_costmap.h>
 #include <costmap_2d/costmap_2d_publisher.h>
 #include <imprecise_costmap_2d/ImpreciseCostmap2DConfig.h>
 #include <costmap_2d/footprint.h>
 #include <geometry_msgs/Polygon.h>
 #include <geometry_msgs/PolygonStamped.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PointStamped.h>
 #include <dynamic_reconfigure/server.h>
-//#include <pluginlib/class_loader.hpp>
+#include <pluginlib/class_loader.hpp>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_ros/buffer.h>
 class SuperValue : public XmlRpc::XmlRpcValue
@@ -228,8 +230,12 @@ public:
    * getUnpaddedRobotFootprint(). */
   void setUnpaddedRobotFootprintPolygon(const geometry_msgs::Polygon& footprint);
 
+  void incomingInput(const geometry_msgs::Point& input);
+
+  
 protected:
   ImpreciseCostmap* i_costmap_;
+  costmap_2d::LayeredCostmap* s_costmap_;
   std::string name_;
   tf2_ros::Buffer& tf_;  ///< @brief Used for transforming point clouds
   std::string global_frame_;  ///< @brief The global frame for the costmap
@@ -254,14 +260,18 @@ private:
   ros::Timer timer_;
   ros::Time last_publish_;
   ros::Duration publish_cycle;
-  //pluginlib::ClassLoader<Layer> plugin_loader_;
+  pluginlib::ClassLoader<costmap_2d::Layer> plugin_loader_;
+  boost::shared_ptr<costmap_2d::Layer> staticmap_;
   geometry_msgs::PoseStamped old_pose_;
   costmap_2d::Costmap2DPublisher* publisher_;
+  costmap_2d::Costmap2DPublisher* low_cmap_publisher_;
+  costmap_2d::Costmap2DPublisher* high_cmap_publisher_;
   dynamic_reconfigure::Server<imprecise_costmap_2d::ImpreciseCostmap2DConfig> *dsrv_;
 
   boost::recursive_mutex configuration_mutex_;
 
   ros::Subscriber footprint_sub_;
+  ros::Subscriber hinput_sub_;
   ros::Publisher footprint_pub_;
   std::vector<geometry_msgs::Point> unpadded_footprint_;
   std::vector<geometry_msgs::Point> padded_footprint_;
