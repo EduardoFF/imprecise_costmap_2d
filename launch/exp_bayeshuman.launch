@@ -1,0 +1,52 @@
+<launch>
+  <arg name="scenario" default="imprecise_cluttered"/>
+  <arg name="gui" default="true"/>
+  <arg name="x" default="0.0" />
+  <arg name="y" default="0.0" />
+  <arg name="tx" default="0.0" />
+  <arg name="ty" default="0.0" />
+  <arg name="yaw" default="0.0" />
+  <arg name="exp_id" default="test" />
+  <arg name="record_bag" default="false" />
+  
+  <include file="$(find turtlebot_gazebo)/launch/turtlebot_world.launch" >
+       <arg name="world_file" value="$(find imprecise_costmap_2d)/scenarios/$(arg scenario).world" />
+       <arg name="gui" value="$(arg gui)" />
+  </include>
+
+<!--
+  <include file="$(find imprecise_costmap_2d)/launch/laser_negated_filter.launch">
+  </include>
+
+  <include file="$(find imprecise_costmap_2d)/launch/laser_simple_filter.launch">
+  </include>
+
+<node name="bayes_human_emulator" pkg="simple_navigation_goals" type="bayes_human_emulator_node" output="screen">
+    <remap from="scan" to="scan_negated_filtered" />
+</node>
+  -->
+  
+  <include file="$(find imprecise_costmap_2d)/launch/precise_navigation_amcl.launch">
+  	   <arg name="map_file" value="$(find imprecise_costmap_2d)/scenarios/$(arg scenario)_clean.yaml" />
+           <arg name="x" value="$(arg x)" />
+  	   <arg name="y" default="$(arg y)" />
+  	   <arg name="yaw" default="$(arg yaw)" />
+       	   <arg name="laser_topic" value="/scan_filtered" />
+  </include>
+  
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find imprecise_costmap_2d)/rviz/navigation_precise.rviz"/>
+
+<!--
+  <node name="navigation_goal" pkg="simple_navigation_goals" type="simple_navigation_goals_node" output="screen">
+    <param name="target_x" value="$(arg tx)"/>
+    <param name="target_y" value="$(arg ty)"/>
+</node>
+-->
+  <node name="path_recorder" pkg="simple_navigation_goals" type="path_recorder_node" output="screen" />
+ <node pkg="rosbag" type="record" name="rosbag_record"
+       args="/robot_trajectory -o $(find imprecise_costmap_2d)/bags/$(arg exp_id)"
+       if="$(arg record_bag)" />
+
+<include file="$(find turtlebot_teleop)/launch/logitech.launch"/>
+
+</launch>

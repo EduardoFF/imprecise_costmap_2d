@@ -1,8 +1,10 @@
 static_layer:
   enabled:              true
-  lethal_threshold:     100
+  lethal_threshold:     80
   trinary_costmap:      false
-  
+  track_unknown_space:   true
+track_unknown_space: true
+always_send_full_costmap: true  
 
   
 

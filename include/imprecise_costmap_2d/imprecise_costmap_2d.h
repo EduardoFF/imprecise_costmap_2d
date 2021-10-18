@@ -153,6 +153,7 @@ private:
   costmap_2d::Costmap2D costmap_;
   costmap_2d::Costmap2D low_costmap_;
   costmap_2d::Costmap2D high_costmap_;
+  costmap_2d::Costmap2D input_costmap_;
   costmap_2d::Costmap2D *p_costmap_;
   std::string global_frame_;
 

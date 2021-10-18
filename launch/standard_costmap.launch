@@ -1,0 +1,28 @@
+<launch>
+  <param name="/use_sim_time" value="true"/>
+  <arg name="base_frame_id"   default="base_footprint"/>
+  <arg name="global_frame_id" default="map"/>
+  <arg name="map_topic" default="/map"/>
+  <arg name="orig_costmap_topic" default="orig_costmap" />
+  <arg name="laser_topic" default="scan" />
+
+  <!-- Publishes the voxel grid to rviz for display -->
+  
+  <node pkg="costmap_2d" type="costmap_2d_markers" name="voxel_visualizer">
+    <remap from="voxel_grid" to="costmap/voxel_grid"/>
+  </node>
+  
+  <!-- Run the costmap node -->
+  <node name="costmap_node" pkg="costmap_2d" type="costmap_2d_node">
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/costmap_common_params.yaml" command="load" ns="costmap" />
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/global_costmap_params.yaml" command="load" ns="costmap" />
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/probabilistic_costmap_params.yaml" command="load" ns="costmap" />
+
+    <param name="costmap/global_frame" value="$(arg global_frame_id)"/>
+    <param name="costmap/static_layer/map_topic" value="$(arg map_topic)"/>	
+    <param name="costmap/robot_base_frame" value="$(arg base_frame_id)"/>
+    <remap from="scan" to="$(arg laser_topic)"/>
+    <remap from="~costmap/costmap" to="$(arg orig_costmap_topic)"/>
+  </node>
+
+</launch>

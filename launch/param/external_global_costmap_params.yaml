@@ -1,0 +1,22 @@
+update_frequency: 1.0
+publish_frequency: 1.0
+static_map: true
+transform_tolerance: 0.5
+always_send_full_costmap: true
+plugins:
+  - {name: static_layer,            type: "costmap_2d::StaticLayer"}
+
+static_layer:
+  enabled: true
+  lethal_threshold:     220
+  trinary_costmap:      false
+  track_unknown_space:   true
+track_unknown_space: true
+
+
+
+
+
+
+
+

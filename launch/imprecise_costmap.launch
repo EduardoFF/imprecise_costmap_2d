@@ -1,12 +1,14 @@
 <launch>
   <arg name="base_frame_id"   default="base_footprint"/>
   <arg name="global_frame_id" default="map"/>
-  <arg name="orig_costmap_topic" default="/orig_costmap" />
-  <arg name="imprecise_costmap_topic" default="imprecise_costmap" />	
+  <arg name="orig_costmap_topic" default="orig_costmap" />
+  <arg name="imprecise_costmap_topic" default="imprecise_costmap" />
+  <arg name="human_input_topic" default="human_input" />		
 
   <!-- Run the imprecise costmap node -->
   <node name="imprecise_costmap_node" pkg="imprecise_costmap_2d" type="imprecise_costmap_2d_node" >
     <rosparam file="$(find imprecise_costmap_2d)/launch/param/costmap_common_params.yaml" command="load" ns="costmap" />
+    
      <rosparam file="$(find imprecise_costmap_2d)/launch/param/probabilistic_costmap_params.yaml" command="load" ns="costmap" />
 
     <param name="costmap/global_frame" value="$(arg global_frame_id)"/>
@@ -14,5 +16,6 @@
 
     <param name="costmap/robot_base_frame" value="$(arg base_frame_id)"/>
     <remap from="~costmap/imprecise_costmap" to="$(arg imprecise_costmap_topic)"/>
+    <remap from="~costmap/human_input" to="$(arg human_input_topic)"/>
   </node>
 </launch>

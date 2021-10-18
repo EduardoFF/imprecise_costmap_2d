@@ -264,6 +264,7 @@ private:
   boost::shared_ptr<costmap_2d::Layer> staticmap_;
   geometry_msgs::PoseStamped old_pose_;
   costmap_2d::Costmap2DPublisher* publisher_;
+  costmap_2d::Costmap2DPublisher* scmap_publisher_;
   costmap_2d::Costmap2DPublisher* low_cmap_publisher_;
   costmap_2d::Costmap2DPublisher* high_cmap_publisher_;
   dynamic_reconfigure::Server<imprecise_costmap_2d::ImpreciseCostmap2DConfig> *dsrv_;

@@ -1,0 +1,13 @@
+scan_filter_chain:
+- name: box
+  type: LaserScanBoxNoiserFilter
+  params:
+    box_frame: map
+    min_x: -2
+    max_x: 1
+    min_y: -2
+    max_y: 1
+    min_z: -1.0
+    max_z: 2.0
+    mean:  -1
+    stddev: 0.4

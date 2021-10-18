@@ -1,0 +1,66 @@
+<!-- 
+    ROS navigation stack with velocity smoother and safety (reactive) controller
+-->
+<launch>
+  <include file="$(find turtlebot_navigation)/launch/includes/velocity_smoother.launch.xml"/>
+  <include file="$(find turtlebot_navigation)/launch/includes/safety_controller.launch.xml"/>
+  
+  <arg name="odom_frame_id"   default="odom"/>
+  <arg name="base_frame_id"   default="base_footprint"/>
+  <arg name="global_frame_id" default="map"/>
+  <arg name="odom_topic" default="odom" />
+  <arg name="laser_topic" default="scan" />
+  <arg name="map_topic" default="imprecise_costmap"/>
+
+    <!-- Move base -->
+  <arg name="step_size" default="2.5"/>
+  <arg name="delta" default="$(eval arg('step_size') / 2)"/>
+  <arg name="max_iterations" default="200000"/>
+  <arg name="goal_radius" default="1.0"/>
+  <arg name="custom_param_file" value="$(find turtlebot_rrt)/config/rrt_global_planner_params.yaml"/>
+  
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <!-- Costmap params -->
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/costmap_common_params.yaml" command="load" ns="local_costmap" />   
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/local_costmap_params.yaml" command="load" />   
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/external_global_costmap_params.yaml" command="load" ns="global_costmap"/>
+
+    <!--
+	Local planner
+    -->
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/dwa_local_planner_params.yaml" command="load" />
+
+    <!-- Move base params derived from rrt -->
+    <rosparam file="$(find turtlebot_rrt)/config/move_base_params.yaml" command="load" />
+    <!--<rosparam file="param/rrt/move_base_params.yaml" command="load" />-->
+    
+    <!--
+	global planner params
+    -->
+    <rosparam file="$(find imprecise_costmap_2d)/launch/param/global_planner_params.yaml" command="load" />
+    <rosparam file="$(find turtlebot_rrt)/config/rrt_global_planner_params.yaml" command="load" />
+    <!--<rosparam file="param/navfn_global_planner_params.yaml" command="load" />-->
+    <!-- external params file that could be loaded into the move_base namespace -->
+    <rosparam file="$(arg custom_param_file)" command="load" />
+    
+    <!-- reset frame_id parameters using user input data -->
+    <param name="global_costmap/static_layer/map_topic" value="$(arg map_topic)"/>
+    <param name="global_costmap/global_frame" value="$(arg global_frame_id)"/>
+    <param name="global_costmap/robot_base_frame" value="$(arg base_frame_id)"/>
+    <param name="local_costmap/global_frame" value="$(arg odom_frame_id)"/>
+    <param name="local_costmap/robot_base_frame" value="$(arg base_frame_id)"/>
+    <param name="DWAPlannerROS/global_frame_id" value="$(arg odom_frame_id)"/>
+
+    <!-- Some parameters from RRT -->
+    <param name="step_size_" value="$(arg step_size)"/>
+    <param name="delta_" value="$(arg delta)"/>
+    <param name="max_iterations_" value="$(arg max_iterations)"/>
+    <param name="goal_radius_" value="$(arg goal_radius)"/>    
+
+    <!-- Standard Params -->
+    <remap from="cmd_vel" to="navigation_velocity_smoother/raw_cmd_vel"/>
+    <remap from="odom" to="$(arg odom_topic)"/>
+    <remap from="scan" to="$(arg laser_topic)"/>
+  </node>
+</launch>

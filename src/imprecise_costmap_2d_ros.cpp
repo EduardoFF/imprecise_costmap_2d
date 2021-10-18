@@ -45,11 +45,27 @@
 #include <tf2/convert.h>
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+//#include <imprecise_costmap_2d/eigenmvn.h>
+#include <Eigen/Dense>
+#include <random>
 
+#include <boost/random.hpp>
 using namespace std;
 
 namespace imprecise_costmap_2d
 {
+
+  /**
+  Take a pair of un-correlated variances.
+  Create a covariance matrix by correlating 
+  them, sandwiching them in a rotation matrix.
+*/
+Eigen::Matrix2d genCovar(double v0,double v1,double theta)
+{
+  Eigen::Matrix2d rot = Eigen::Rotation2Dd(theta).matrix();
+  return rot*Eigen::DiagonalMatrix<double,2,2>(v0,v1)*rot.transpose();
+}
+
 
 void move_parameter(ros::NodeHandle& old_h, ros::NodeHandle& new_h, std::string name, bool should_delete = true)
 {
@@ -111,7 +127,7 @@ ImpreciseCostmap2DROS::ImpreciseCostmap2DROS(const std::string& name, tf2_ros::B
   // check if we want a rolling window version of the costmap
   bool rolling_window, track_unknown_space, always_send_full_costmap;
   private_nh.param("rolling_window", rolling_window, false);
-  private_nh.param("track_unknown_space", track_unknown_space, false);
+  private_nh.param("track_unknown_space", track_unknown_space, true);
   private_nh.param("always_send_full_costmap", always_send_full_costmap, false);
 
   std::string map_topic;
@@ -129,7 +145,7 @@ ImpreciseCostmap2DROS::ImpreciseCostmap2DROS(const std::string& name, tf2_ros::B
   move_parameter(private_nh, map_layer, "map_topic");
   move_parameter(private_nh, map_layer, "unknown_cost_value");
   move_parameter(private_nh, map_layer, "lethal_cost_threshold");
-  move_parameter(private_nh, map_layer, "track_unknown_space", false);
+  move_parameter(private_nh, map_layer, "track_unknown_space");
 
 
   s_costmap_ = new costmap_2d::LayeredCostmap(global_frame_, rolling_window, track_unknown_space);
@@ -153,7 +169,7 @@ ImpreciseCostmap2DROS::ImpreciseCostmap2DROS(const std::string& name, tf2_ros::B
   private_nh.param(topic_param, topic, std::string("footprint"));
   footprint_sub_ = private_nh.subscribe(topic, 1, &ImpreciseCostmap2DROS::setUnpaddedRobotFootprintPolygon, this);
 
-  hinput_sub_ = private_nh.subscribe("human_input", 1, &ImpreciseCostmap2DROS::incomingInput, this);
+  hinput_sub_ = private_nh.subscribe("human_input", 100, &ImpreciseCostmap2DROS::incomingInput, this);
 
   
   if (!private_nh.searchParam("published_footprint_topic", topic_param))
@@ -166,9 +182,14 @@ ImpreciseCostmap2DROS::ImpreciseCostmap2DROS(const std::string& name, tf2_ros::B
 
   setUnpaddedRobotFootprint(costmap_2d::makeFootprintFromParams(private_nh));
 
-  publisher_ = new costmap_2d::Costmap2DPublisher(&private_nh, s_costmap_->getCostmap(), global_frame_, "imprecise_costmap",
+  ROS_INFO("always_send_full_costmap %d\n", always_send_full_costmap);
+  publisher_ = new costmap_2d::Costmap2DPublisher(&private_nh, i_costmap_->getCostmap(), global_frame_, "imprecise_costmap",
                                       always_send_full_costmap);
 
+  scmap_publisher_ = new costmap_2d::Costmap2DPublisher(&private_nh, s_costmap_->getCostmap(), global_frame_, "sensor_costmap",
+                                      always_send_full_costmap);
+
+  
   low_cmap_publisher_ = new costmap_2d::Costmap2DPublisher(&private_nh, i_costmap_->getLowCostmap(), global_frame_, "imprecise_costmap_low",
                                       always_send_full_costmap);
 
@@ -205,6 +226,15 @@ ImpreciseCostmap2DROS::~ImpreciseCostmap2DROS()
   }
   if (publisher_ != NULL)
     delete publisher_;
+
+  if (scmap_publisher_ != NULL)
+    delete scmap_publisher_;
+
+  if (low_cmap_publisher_ != NULL)
+    delete low_cmap_publisher_;
+
+  if (high_cmap_publisher_ != NULL)
+    delete high_cmap_publisher_;
 
   delete i_costmap_;
   delete s_costmap_;
@@ -293,6 +323,7 @@ void ImpreciseCostmap2DROS::reconfigureCB(imprecise_costmap_2d::ImpreciseCostmap
   {
     map_update_thread_shutdown_ = true;
     map_update_thread_->join();
+    ROS_INFO("Deleted map_update_thread\n");
     delete map_update_thread_;
   }
   map_update_thread_shutdown_ = false;
@@ -303,6 +334,7 @@ void ImpreciseCostmap2DROS::reconfigureCB(imprecise_costmap_2d::ImpreciseCostmap
     publish_cycle = ros::Duration(1 / map_publish_frequency);
   else
     publish_cycle = ros::Duration(-1);
+  ROS_INFO("map_publish_frequency %.2f, publish_cycle %f\n", map_publish_frequency, publish_cycle.toSec());
 
   // find size parameters
   double map_width_meters = config.width, map_height_meters = config.height, resolution = config.resolution, origin_x =
@@ -327,6 +359,7 @@ void ImpreciseCostmap2DROS::reconfigureCB(imprecise_costmap_2d::ImpreciseCostmap
 
   old_config_ = config;
 
+  ROS_INFO("Update frequency %.2f\n", map_update_frequency);
   map_update_thread_ = new boost::thread(boost::bind(&ImpreciseCostmap2DROS::mapUpdateLoop, this, map_update_frequency));
 }
 
@@ -404,6 +437,8 @@ void ImpreciseCostmap2DROS::movementCB(const ros::TimerEvent &event)
 
 void ImpreciseCostmap2DROS::mapUpdateLoop(double frequency)
 {
+  ROS_INFO("mapUpdateLoop frequency %.2f",
+	   frequency);
   // the user might not want to run the loop every cycle
   if (frequency == 0.0)
     return;
@@ -423,6 +458,8 @@ void ImpreciseCostmap2DROS::mapUpdateLoop(double frequency)
     end_t = end.tv_sec + double(end.tv_usec) / 1e6;
     t_diff = end_t - start_t;
     ROS_DEBUG("Map update time: %.9f", t_diff);
+    ROS_INFO("publish_cycle %.2f map_initilaized %d\n",
+	     publish_cycle.toSec(), s_costmap_->isInitialized());
     if (publish_cycle.toSec() > 0 && s_costmap_->isInitialized())
     {
       unsigned int x0, y0, xn, yn;
@@ -432,7 +469,11 @@ void ImpreciseCostmap2DROS::mapUpdateLoop(double frequency)
       ros::Time now = ros::Time::now();
       if (last_publish_ + publish_cycle < now)
       {
+	ROS_INFO("Publishing maps\n");
         publisher_->publishCostmap();
+	low_cmap_publisher_->publishCostmap();
+	high_cmap_publisher_->publishCostmap();
+	scmap_publisher_->publishCostmap();
         last_publish_ = now;
       }
     }
@@ -597,11 +638,79 @@ void ImpreciseCostmap2DROS::getOrientedFootprint(std::vector<geometry_msgs::Poin
                      padded_footprint_, oriented_footprint);
 }
 
+  double pdf(const Eigen::Vector2d& x,  Eigen::Vector2d &mean,
+  Eigen::Matrix2d &sigma ) 
+{
+  double sqrt2pi = std::sqrt(2 * M_PI);
+  double quadform  = (x - mean).transpose() * sigma.inverse() * (x - mean);
+  double norm = std::pow(sqrt2pi, - 2) *
+                std::pow(sigma.determinant(), - 0.5);
+
+  return norm * exp(-0.5 * quadform);
+}
+
+  
 void ImpreciseCostmap2DROS::incomingInput(const geometry_msgs::Point& input)
 {
-  
+  printf("input\n"); 
   ROS_INFO("Got input pose %.2f %.2f %.2f\n", input.x,
 	  input.y, input.z);
+  geometry_msgs::PoseStamped global_pose;
+  if (!getRobotPose(global_pose))
+    return;
+
+  double yaw = tf2::getYaw(global_pose.pose.orientation);
+
+  
+  
+  //Eigen::Vector2d mean;
+  //Eigen::Matrix2d covar;
+  //  mean << input.x,input.y; // Set the mean
+  //mean << 0, 0;
+  // Create a covariance matrix
+  // Much wider than it is tall
+  // and rotated clockwise by a bit
+  //double var = 3.0 / i_costmap_->getLowCostmap()->getResolution();
+  //  ROS_INFO("var %.2f", var);
+  //covar = genCovar(var,var,0);
+
+ // Create a bivariate gaussian distribution of doubles.
+ // with our chosen mean and covariance
+  //  const int dim = 2;
+  //Eigen::EigenMultivariateNormal<double> normX_solver(mean,covar);
+  //int mat_n = static_cast<unsigned int>(ceil(10.0 / i_costmap_->getLowCostmap()->getResolution()));
+  //ROS_INFO("mat_n costmap res %.2f (%d)", i_costmap_->getLowCostmap()->getResolution(), mat_n);
+  //unsigned int nn = mat_n * mat_n;
+  //Eigen::Matrix2d MVNMat =  normX_solver.samples(nn).transpose();
+  
+
+  // Let's use a polygon (ellipse)
+  std::vector<geometry_msgs::Point> area;
+  double off_alpha = atan2(input.y - global_pose.pose.position.y,
+			   input.x - global_pose.pose.position.x);
+  double r1 = 2;
+  double r2 = 1.5;
+  for(int i=0; i < 24; i++)
+    {
+      double alpha = i*M_PI*2/24.;
+      geometry_msgs::Point pt;
+      // point in ellipse, translated to input
+      double px = r1 * cos(alpha);
+      double py = r2 * sin(alpha);
+      /// we want the ellipse to be facing the robot,
+      /// with the longest radius aligned with the y-axis
+      double beta = off_alpha + M_PI/2.;
+      pt.x = px*cos(beta) - py*sin(beta);
+      pt.y = px*sin(beta) + py*cos(beta);
+
+      pt.x += input.x;
+      pt.y += input.y;
+      area.push_back(pt);
+    }
+  i_costmap_->getLowCostmap()->setConvexPolygonCost(area, 50);
+  i_costmap_->getHighCostmap()->setConvexPolygonCost(area, 85);
+
+ #if 0
   std::vector<geometry_msgs::Point> area;
   for(std::vector<geometry_msgs::Point>::iterator it = unpadded_footprint_.begin(); it != unpadded_footprint_.end(); it++)
     {
@@ -614,7 +723,10 @@ void ImpreciseCostmap2DROS::incomingInput(const geometry_msgs::Point& input)
       ps.header.frame_id = robot_base_frame_;
       ps.header.stamp = ros::Time();
 
+      
       geometry_msgs::PointStamped global_ps;
+      global_ps = ps;
+      /*
       std::string tf_error;
       if( tf_.canTransform(global_frame_, robot_base_frame_, ros::Time(), ros::Duration(0.1), &tf_error))
 	{
@@ -645,11 +757,71 @@ void ImpreciseCostmap2DROS::incomingInput(const geometry_msgs::Point& input)
 		   robot_base_frame_.c_str());	  
 	}
       ROS_INFO("Translated footprint in map %.2f %.2f",global_ps.point.x, global_ps.point.y);
+      */
       area.push_back(global_ps.point);
+      unsigned int mx, my;
+
+      if( !i_costmap_->getLowCostmap()->worldToMap(global_ps.point.x, global_ps.point.y, mx, my))
+	{
+	  ROS_INFO("Error worldToMap %f %f\n", global_ps.point.x, global_ps.point.y);
+	    ROS_INFO("LowCostmap o %.2f %.2f res %.2f map size %d x %d (%.2f x %.2f)",
+		     i_costmap_->getLowCostmap()->getOriginX(),
+		     i_costmap_->getLowCostmap()->getOriginY(),
+		     i_costmap_->getLowCostmap()->getResolution(),
+		     i_costmap_->getLowCostmap()->getSizeInCellsX(),
+		     i_costmap_->getLowCostmap()->getSizeInCellsY(),
+		     i_costmap_->getLowCostmap()->getSizeInMetersX(),
+		     i_costmap_->getLowCostmap()->getSizeInMetersY());
+
+	}
+      else
+	{
+	  ROS_INFO("worldToMap succeed %f %f %d %d\n", global_ps.point.x, global_ps.point.y, mx, my);
+	}
     }
-  i_costmap_->getLowCostmap()->setConvexPolygonCost(area, 254);
-  
-  
+#endif
+
+  /*
+   unsigned int mx, my;
+
+  if( !i_costmap_->getLowCostmap()->worldToMap(input.x, input.y, mx, my))
+    {
+      ROS_INFO("Error worldToMap %f %f\n", input.x, input.y);
+      return;
+    }
+  else
+    {
+      ROS_INFO("worldToMap is %d %d\n", mx, my);
+    }
+  ROS_INFO("Looping xx from %d", mat_n);
+  ROS_INFO("Looping from %d", -1*mat_n/2);
+  for( int i = -mat_n/2; i < mat_n/2; i++)
+    {
+      ROS_INFO("i %d", i);
+      int mix = mx + i;
+      ROS_INFO("mix is %d [SIZEX] %d\n", mix, i_costmap_->getLowCostmap()->getSizeInCellsX());
+      if( ! (mix >= 0 &&
+	     mix < i_costmap_->getLowCostmap()->getSizeInCellsX() ))
+	continue;
+      for(int j = -mat_n/2; j<mat_n/2; j++)
+	{
+	  int miy = my + i;
+	  ROS_INFO("miy is %d [SIZEY] %d\n", mix, i_costmap_->getLowCostmap()->getSizeInCellsY());
+	  if( ! (miy >= 0 &&
+		 miy < i_costmap_->getLowCostmap()->getSizeInCellsY() ))
+	    continue;
+	  Eigen::Vector2d pt;
+	  pt << i, j;
+	  double pp = pdf(pt, mean , covar);
+	  ROS_INFO("pdf for %d %d is %.2f\n", mix, miy, pp);
+	  if( pp > 0)
+	    ROS_INFO("POSITIVE pdf for %d %d is %.2f\n", mix, miy, pp);
+	  i_costmap_->getLowCostmap()->setCost((unsigned int) mix,
+					       (unsigned int) miy,
+					       (unsigned char)ceil(100*pp));
+	}
+    }
+  */
 }
 
   

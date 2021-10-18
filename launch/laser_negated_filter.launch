@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="laser_filters" type="scan_to_scan_filter_chain"
+      name="laser_filter">
+    <rosparam command="load" file="$(find imprecise_costmap_2d)/launch/param/my_laser_config_negated.yaml" />
+    <remap from="scan" to="scan" />
+    <remap from="scan_filtered" to="scan_negated_filtered" />
+  </node>
+</launch>
